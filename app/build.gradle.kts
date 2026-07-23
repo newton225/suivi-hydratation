@@ -1,4 +1,5 @@
 import com.google.gms.googleservices.GoogleServicesPlugin.MissingGoogleServicesStrategy
+import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 
 plugins {
   alias(libs.plugins.android.application)
@@ -7,11 +8,13 @@ plugins {
   alias(libs.plugins.roborazzi)
   alias(libs.plugins.secrets)
   alias(libs.plugins.google.services)
+  alias(libs.plugins.kotlin.android) // add
 }
 
 android {
   namespace = "com.example"
-  compileSdk { version = release(36) { minorApiLevel = 1 } }
+//  compileSdk { version = release(36) { minorApiLevel = 1 } }
+  compileSdk = 36
 
   defaultConfig {
     applicationId = "com.aistudio.hydratation.qxywtz"
@@ -23,30 +26,49 @@ android {
     testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
   }
 
+//  signingConfigs {
+//    create("release") {
+//      val keystorePath = System.getenv("KEYSTORE_PATH") ?: "${rootDir}/my-upload-key.jks"
+//      storeFile = file(keystorePath)
+//      storePassword = System.getenv("STORE_PASSWORD")
+//      keyAlias = "upload"
+//      keyPassword = System.getenv("KEY_PASSWORD")
+//    }
+//    create("debugConfig") {
+//      storeFile = file("${rootDir}/debug.keystore")
+//      storePassword = "android"
+//      keyAlias = "androiddebugkey"
+//      keyPassword = "android"
+//    }
+//  }
+//
+//  buildTypes {
+//    release {
+//      isCrunchPngs = false
+//      isMinifyEnabled = false
+//      proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
+//      signingConfig = signingConfigs.getByName("release")
+//    }
+//    debug { signingConfig = signingConfigs.getByName("debugConfig") }
+//  }
+
   signingConfigs {
-    create("release") {
-      val keystorePath = System.getenv("KEYSTORE_PATH") ?: "${rootDir}/my-upload-key.jks"
-      storeFile = file(keystorePath)
-      storePassword = System.getenv("STORE_PASSWORD")
-      keyAlias = "upload"
-      keyPassword = System.getenv("KEY_PASSWORD")
-    }
-    create("debugConfig") {
-      storeFile = file("${rootDir}/debug.keystore")
-      storePassword = "android"
-      keyAlias = "androiddebugkey"
-      keyPassword = "android"
+    val releaseKeystore = file(System.getenv("KEYSTORE_PATH") ?: "$rootDir/my-upload-key.jks")
+    if (releaseKeystore.exists()) {
+      create("release") {
+        storeFile = releaseKeystore
+        storePassword = System.getenv("STORE_PASSWORD")
+        keyAlias = "upload"
+        keyPassword = System.getenv("KEY_PASSWORD")
+      }
     }
   }
 
   buildTypes {
     release {
-      isCrunchPngs = false
-      isMinifyEnabled = false
-      proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
-      signingConfig = signingConfigs.getByName("release")
+      // ...
+      signingConfigs.findByName("release")?.let { signingConfig = it }
     }
-    debug { signingConfig = signingConfigs.getByName("debugConfig") }
   }
   compileOptions {
     sourceCompatibility = JavaVersion.VERSION_11
@@ -132,4 +154,11 @@ dependencies {
   debugImplementation(libs.androidx.compose.ui.tooling)
   "ksp"(libs.androidx.room.compiler)
   "ksp"(libs.moshi.kotlin.codegen)
+}
+
+// add
+kotlin {
+  compilerOptions {
+    jvmTarget = JvmTarget.JVM_11
+  }
 }
