@@ -1,0 +1,6 @@
+{
+  "name": "Suivi Hydratation",
+  "description": "Une application de suivi d'hydratation quotidienne avec un objectif de 2L et persistance locale.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
