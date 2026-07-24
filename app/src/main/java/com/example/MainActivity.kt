@@ -1,6 +1,14 @@
 package com.example
 
+import android.content.Context
+import android.media.AudioAttributes
+import android.media.AudioFormat
+import android.media.AudioTrack
+import android.os.Build
 import android.os.Bundle
+import android.os.VibrationEffect
+import android.os.Vibrator
+import android.os.VibratorManager
 import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -44,6 +52,8 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.List
+import androidx.compose.material.icons.automirrored.rounded.VolumeOff
+import androidx.compose.material.icons.automirrored.rounded.VolumeUp
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.Delete
 import androidx.compose.material.icons.rounded.History
@@ -138,6 +148,9 @@ fun HydrationAppScreen(
     // Dialog state for reset confirmation
     var showResetDialog by remember { mutableStateOf(false) }
 
+    // Mute state for water sound effects
+    var isMuted by remember { mutableStateOf(true) }
+
     // Single Toast management to avoid queuing up multiple toasts when tapped rapidly
     var currentToast by remember { mutableStateOf<Toast?>(null) }
     val showToast = { message: String ->
@@ -157,6 +170,8 @@ fun HydrationAppScreen(
             if (!hasShownCongratulations) {
                 showCongratulations = true
                 hasShownCongratulations = true
+                triggerGoalReachedVibration(context)
+                playGoalWaterSplash(isMuted)
             }
         } else {
             // Reset if they drop below the goal (e.g. by deleting a log)
@@ -217,15 +232,31 @@ fun HydrationAppScreen(
                         }
                     }
 
-                    Text(
-                        text = formattedDate,
-                        style = MaterialTheme.typography.bodyMedium.copy(
-                            fontWeight = FontWeight.SemiBold,
-                            color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.7f)
-                        ),
-                        overflow = TextOverflow.Ellipsis,
-                        maxLines = 1
-                    )
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            text = formattedDate,
+                            style = MaterialTheme.typography.bodyMedium.copy(
+                                fontWeight = FontWeight.SemiBold,
+                                color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.7f)
+                            ),
+                            overflow = TextOverflow.Ellipsis,
+                            maxLines = 1
+                        )
+                        Spacer(modifier = Modifier.width(6.dp))
+                        IconButton(
+                            onClick = { isMuted = !isMuted },
+                            modifier = Modifier
+                                .size(36.dp)
+                                .testTag("mute_toggle_button")
+                        ) {
+                            Icon(
+                                imageVector = if (isMuted) Icons.AutoMirrored.Rounded.VolumeOff else Icons.AutoMirrored.Rounded.VolumeUp,
+                                contentDescription = if (isMuted) "Activer le son" else "Couper le son",
+                                tint = if (isMuted) MaterialTheme.colorScheme.onBackground.copy(alpha = 0.4f) else TurquoisePrimary,
+                                modifier = Modifier.size(20.dp)
+                            )
+                        }
+                    }
                 }
             }
 
@@ -341,10 +372,12 @@ fun HydrationAppScreen(
                     // Main "+ 250 ml" Button with liquid wave and splash effect
                     LiquidAddButton(
                         onClick = {
+                            triggerClickVibration(context)
                             if (todayTotal >= dailyGoal) {
                                 showToast("Limite autorisée de 2L déjà atteinte ! 🎉")
                             } else {
                                 viewModel.addWater(250)
+                                playWaterAddSound(isMuted)
                                 showToast("+250 ml ajoutés")
                             }
                         },
@@ -1021,4 +1054,149 @@ fun HistoryLogItem(
             }
         }
     }
+}
+
+
+
+fun triggerClickVibration(context: Context) {
+    try {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            val vibratorManager = context.getSystemService(Context.VIBRATOR_MANAGER_SERVICE) as? VibratorManager
+            vibratorManager?.defaultVibrator?.vibrate(
+                VibrationEffect.createOneShot(50, VibrationEffect.DEFAULT_AMPLITUDE)
+            )
+        } else {
+            @Suppress("DEPRECATION")
+            val vibrator = context.getSystemService(Context.VIBRATOR_SERVICE) as? Vibrator
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                vibrator?.vibrate(VibrationEffect.createOneShot(50, VibrationEffect.DEFAULT_AMPLITUDE))
+            } else {
+                @Suppress("DEPRECATION")
+                vibrator?.vibrate(50)
+            }
+        }
+    } catch (_: Exception) {
+    }
+}
+
+fun triggerGoalReachedVibration(context: Context) {
+    try {
+        val pattern = longArrayOf(0, 250, 100, 400)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            val vibratorManager = context.getSystemService(Context.VIBRATOR_MANAGER_SERVICE) as? VibratorManager
+            vibratorManager?.defaultVibrator?.vibrate(
+                VibrationEffect.createWaveform(pattern, -1)
+            )
+        } else {
+            @Suppress("DEPRECATION")
+            val vibrator = context.getSystemService(Context.VIBRATOR_SERVICE) as? Vibrator
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                vibrator?.vibrate(VibrationEffect.createWaveform(pattern, -1))
+            } else {
+                @Suppress("DEPRECATION")
+                vibrator?.vibrate(pattern, -1)
+            }
+        }
+    } catch (_: Exception) {
+    }
+}
+
+
+fun playWaterAddSound(isMuted: Boolean) {
+    if (isMuted) return
+    Thread {
+        try {
+            val sampleRate = 44100
+            val duration = 0.35
+            val numSamples = (duration * sampleRate).toInt()
+            val buffer = ShortArray(numSamples)
+            val random = java.util.Random()
+
+            for (i in 0 until numSamples) {
+                val t = i.toDouble() / sampleRate
+                val freq = 320.0 + (t / duration) * 380.0 + kotlin.math.sin(2.0 * PI * 25.0 * t) * 20.0
+                val sine = kotlin.math.sin(2.0 * PI * freq * t)
+                val noise = (random.nextDouble() * 2.0 - 1.0) * 0.05
+                val envelope = kotlin.math.sin(PI * (t / duration))
+                // Extremely soft, whisper-quiet volume (0.015 scaling)
+                val sample = ((sine + noise) * envelope * 0.015 * Short.MAX_VALUE)
+                buffer[i] = sample.toInt().coerceIn(Short.MIN_VALUE.toInt(), Short.MAX_VALUE.toInt()).toShort()
+            }
+
+            val audioTrack = AudioTrack.Builder()
+                .setAudioAttributes(
+                    AudioAttributes.Builder()
+                        .setUsage(AudioAttributes.USAGE_GAME)
+                        .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
+                        .build()
+                )
+                .setAudioFormat(
+                    AudioFormat.Builder()
+                        .setEncoding(AudioFormat.ENCODING_PCM_16BIT)
+                        .setSampleRate(sampleRate)
+                        .setChannelMask(AudioFormat.CHANNEL_OUT_MONO)
+                        .build()
+                )
+                .setBufferSizeInBytes(buffer.size * 2)
+                .setTransferMode(AudioTrack.MODE_STATIC)
+                .build()
+
+            audioTrack.write(buffer, 0, buffer.size)
+            audioTrack.setVolume(0.05f)
+            audioTrack.play()
+            Thread.sleep((duration * 1000).toLong() + 50)
+            audioTrack.release()
+        } catch (_: Exception) {
+        }
+    }.start()
+}
+
+fun playGoalWaterSplash(isMuted: Boolean) {
+    if (isMuted) return
+    Thread {
+        try {
+            val sampleRate = 44100
+            val duration = 0.75
+            val numSamples = (duration * sampleRate).toInt()
+            val buffer = ShortArray(numSamples)
+            val random = java.util.Random()
+
+            for (i in 0 until numSamples) {
+                val t = i.toDouble() / sampleRate
+                val freq1 = 350.0 + kotlin.math.sin(2.0 * PI * 8.0 * t) * 80.0
+                val freq2 = 520.0 + kotlin.math.sin(2.0 * PI * 12.0 * t) * 100.0
+                val sine = kotlin.math.sin(2.0 * PI * freq1 * t) * 0.4 + kotlin.math.sin(2.0 * PI * freq2 * t) * 0.4
+                val noise = (random.nextDouble() * 2.0 - 1.0) * 0.08
+                val envelope = kotlin.math.sin(PI * (t / duration))
+                // Soft celebratory water splash volume (0.02 scaling)
+                val sample = ((sine + noise) * envelope * 0.02 * Short.MAX_VALUE)
+                buffer[i] = sample.toInt().coerceIn(Short.MIN_VALUE.toInt(), Short.MAX_VALUE.toInt()).toShort()
+            }
+
+            val audioTrack = AudioTrack.Builder()
+                .setAudioAttributes(
+                    AudioAttributes.Builder()
+                        .setUsage(AudioAttributes.USAGE_GAME)
+                        .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
+                        .build()
+                )
+                .setAudioFormat(
+                    AudioFormat.Builder()
+                        .setEncoding(AudioFormat.ENCODING_PCM_16BIT)
+                        .setSampleRate(sampleRate)
+                        .setChannelMask(AudioFormat.CHANNEL_OUT_MONO)
+                        .build()
+                )
+                .setBufferSizeInBytes(buffer.size * 2)
+                .setTransferMode(AudioTrack.MODE_STATIC)
+                .build()
+
+            audioTrack.write(buffer, 0, buffer.size)
+            audioTrack.setVolume(0.05f)
+            audioTrack.play()
+            Thread.sleep((duration * 1000).toLong() + 50)
+            audioTrack.release()
+        } catch (_: Exception) {
+        }
+    }.start()
 }
